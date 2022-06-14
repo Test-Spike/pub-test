@@ -70,7 +70,8 @@ jobs:
         echo "***************Printing $tag1 mentioned places****************"
         grep -rn "@$tag1" *  
         echo "******************Replacing $tag1 with $new_tag in all action.yml files*******************"
-        find ./ -type f -exec sed -i -e "s|@$tag1|@$new_tag|g" {} \;
+        #find ./ -type f -exec sed -i -e "s|@$tag1|@$new_tag|g" {} \;
+        find ./ -type f -exec sed -i -e "s|@latest|@$new_tag|g" {} \;
         echo "Replacing $tag1 with $new_tag in all action.yml files"
         echo "******************After replacing new version, Printing $new_tag mentioned places**************************"
         grep -rn "@$new_tag" *
