@@ -1,0 +1,85 @@
+# Appsec Composite action
+name: 'DevSecOps Application Security Actions'
+description: 'Running Fority Security Scans for project codes'
+
+inputs:
+  sast_release_id:
+    required: true
+  sast_api_key:
+    required: true
+  sast_api_secret:
+    required: true
+  sast_scan_options:
+    required: true
+  sast_scan_notes:
+    required: false
+  application_name:
+    required: true
+  application_src_path:
+    required: false
+  application_artifact_zip_path:
+    required: false
+  download_sast_scan_result:
+    required: false
+    default: false
+  
+runs:
+  using: "composite"
+  steps:
+    - run: echo Hello, You are Executing FOTIFY Scan
+      shell: bash
+    - name: Fortify Scan Create source Zip upload to FOD for Scanning
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Download fortify executable and run scan 
+    #- name: Download Fortify on Demand Universal CI Tool
+    #  uses: fortify/gha-setup-fod-uploader@v1.1.1
+      run: |
+         sudo wget -c https://github.com/fod-dev/fod-uploader-java/releases/download/v5.2.1/FodUpload.jar  
+         if [[ -f "${ARTIFACT_ZIP_PATH}" ]]
+           then
+             echo " Executing command package already Exists: java -jar FodUpload.jar -ac ${{ inputs.sast_api_key }} ${{ inputs.sast_api_secret }} -rid ${{ inputs.sast_release_id }} -purl ${{ env.SAST_PORTAL_URL }} -apiurl ${{ env.SAST_API_URL }} -z ${{inputs.application_artifact_zip_path}} ${{ env.SAST_OPTIONS }}  -n notes:${{ inputs.sast_scan_notes}}"
+             java -jar FodUpload.jar -ac ${{ inputs.sast_api_key }} ${{ inputs.sast_api_secret }} -rid ${{ inputs.sast_release_id }} -purl ${{ env.SAST_PORTAL_URL }} -apiurl ${{ env.SAST_API_URL }} -z ${{inputs.application_artifact_zip_path}} ${{ env.SAST_OPTIONS }}  -n 'notes:${{ inputs.sast_scan_notes}}'  
+           else
+              sudo apt install zip
+              #EXCLUDE_LIST=""
+              ls -lart
+              #if [[ -f  @.zipignore ]] 
+              # then 
+              #   EXCLUDE_LIST= ${EXCLUDE_LIST} + " --exclude @.zipignore"
+              #fi
+              # if [[ -f  .zipignore ]]
+              #  then 
+              #    EXCLUDE_LIST= ${EXCLUDE_LIST} + " --exclude .zipignore"
+              #fi
+              #fi
+              # if [[ -d  .git ]] 
+              #  then 
+              #    EXCLUDE_LIST= ${EXCLUDE_LIST} + " --exclude .git"
+              #fi
+              #echo  ${EXCLUDE_LIST}
+              zip -r ${{inputs.application_name}}_fortify.zip . 
+              echo " executing command with created zip: java -jar FodUpload.jar -ac ${{ inputs.sast_api_key }} ${{ inputs.sast_api_secret }} -rid ${{ inputs.sast_release_id }} -purl ${{ env.SAST_PORTAL_URL }} -apiurl ${{ env.SAST_API_URL }} -z ${{inputs.application_name}}_fortify.zip ${{ env.SAST_OPTIONS }}  -n notes:${{ inputs.sast_scan_notes}}"          
+              java -jar FodUpload.jar -ac ${{ inputs.sast_api_key }} ${{ inputs.sast_api_secret }} -rid ${{ inputs.sast_release_id }} -purl ${{ env.SAST_PORTAL_URL }} -apiurl ${{ env.SAST_API_URL }} -z ${{inputs.application_name}}_fortify.zip ${{ env.SAST_OPTIONS }}  -n 'notes:${{ inputs.sast_scan_notes}}'  
+          fi
+      shell: bash
+      env:
+        SAST_PORTAL_URL: https://emea.fortify.com/
+        SAST_API_URL: https://api.emea.fortify.com/
+        SAST_OPTIONS: '-ep 2 -a 2 -rp 0 -pp 1 -apf -I 1'
+        ARTIFACT_ZIP_PATH: ${{inputs.application_artifact_zip_path}}
+  
+    - name: Download Results
+      uses: fortify/gha-fod-generate-sarif@v1.1.1
+      with:
+        base-url: https://emea.fortify.com/
+        client-id: ${{ inputs.sast_api_key }}
+        client-secret: ${{ inputs.sast_api_secret }}
+        release-id: ${{ inputs.sast_release_id }}
+        output: ./${{inputs.application_name}}_fortify_result
+      if: ${{ inputs.download_sast_scan_result == 'true' }}
+        
+        
+      
+            

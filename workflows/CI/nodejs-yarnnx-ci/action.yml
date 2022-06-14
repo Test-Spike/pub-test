@@ -1,0 +1,75 @@
+inputs:
+  application_name:
+    required: true
+    description: Name of application to build
+  is_application_build:
+    default: true
+  node_version:
+    description: 'The version of node'
+    default: '14.x'
+  is_library_build:
+    default: true
+  run_code_quality_analysis:
+    required: false
+  build_and_push_container_image:
+    required: false  
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Cache Node Modules
+      id: cache-node-modules
+      uses: actions/cache@v2
+      with:
+        path: 'node_modules'
+        key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+    - name: Cache Cypress Binary
+      id: cache-cypress-binary
+      uses: actions/cache@v2
+      with:
+        path: '.cache/Cypress'
+        key: ${{ runner.os }}-cypress-binary-${{ hashFiles('**/yarn.lock') }}
+    - uses: actions/setup-node@v2
+      with:
+        node-version: ${{ inputs.node_version }}
+    - run: yarn --frozen-lockfile
+      shell: bash    
+    
+    - name: Build application
+      shell: bash
+      run: |
+        yarn nx run ${{ inputs.application_name }}:build
+        LOCATION="dist/apps/${{ inputs.application_name }}"
+        cd ${LOCATION}
+        yarn --frozen-lockfile --production=true
+        echo ${GITHUB_SHA}-${{ github.run_number }} > ./public/version.txt
+        ls -lA
+        zip  --symlinks -r -q ../../../${{ inputs.application_name }}-release.zip .next *
+        ls -lhA ../../../${{ inputs.application_name }}-release.zip
+    - name: Upload release zip
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ inputs.application_name }}-release
+        path: ./${{ inputs.application_name }}-release.zip
+        
+    
+    - name: Build library
+      shell: bash
+      run: |
+        yarn nx run ${{ inputs.library_name }}:build-storybook
+        LOCATION="dist/storybook/${{ inputs.library_name }}"
+        cp libs/storybook-package.json ${LOCATION}/package.json
+        cd ${LOCATION}
+        yarn --frozen-lockfile --production=true
+        echo ${GITHUB_SHA}-${{ github.run_number }} > ./version.txt
+        ls -lA
+        zip  --symlinks -r -q ../../../${{ inputs.library_name }}-release.zip .next *
+        ls -lhA ../../../${{ inputs.library_name }}-release.zip
+    - name: Upload release zip
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ inputs.library_name }}-release
+        path: ./${{ inputs.library_name }}-release.zip    

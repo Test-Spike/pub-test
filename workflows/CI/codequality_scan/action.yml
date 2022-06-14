@@ -1,0 +1,33 @@
+# ci_build.yml
+name: 'Build and push Artifact'
+description: 'Building and Pushing Artifact to Azure Artifact Repository'
+inputs:
+  run_code_analysis:
+    required: true
+  cq_project_key:
+    required: false
+  cq_project_name:
+    required: false
+  cq_project_version:
+    required: false
+  cq_host_url:
+    required: false
+  cq_token:
+    required: false
+  cq_scan_arguments:
+     required: false
+    
+runs:
+  using: "composite"
+  steps:
+    - name: Code Quality Analysis
+          if: ${{ inputs.run_code_analysis == 'true' }}  
+          run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.3.0.603:sonar
+               -Dsonar.projectKey=${{inputs.cq_project_key}} 
+               -Dsonar.host.url=${{inputs.cq_host_url}} 
+               -Dsonar.projectName=
+	       -Dsonar.projectVersion=
+	       -Dsonar.java.binaries=./ \
+	       -Dsonar.sources=${p.sonarProperties.sources}"
+               -Dsonar.login=${{inputs.cq_token}} ${{inputs.maven_build_arguments}} ${{ inputs.cq_scan_arguments }}
+          shell: bash

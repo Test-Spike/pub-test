@@ -1,0 +1,102 @@
+name: 'Build Nodejs project'
+description: 'Building and Pushing Artifact to Azure Artifact Repository'
+inputs:
+  application_name:
+    required: true
+  build_file_path:
+    required: false
+  build_file_name:
+    required: false
+  build_tool_version:
+    required: false
+  build_arguments:
+    required: false
+  build_phases: 
+    required: false
+  node_version:
+    required: false
+  build_and_push_container_image:
+    required: false
+  run_code_quality_analysis:
+    required: true
+  cq_project_key:
+    required: false
+  cq_host_url:
+    required: false
+  cq_token:
+    required: false
+  cq_scan_arguments: 
+    required: false
+  artifact_repository_url:
+    required: false
+    
+ 
+    
+runs:
+  using: "composite"
+  steps:
+      - uses: actions/checkout@v2
+          
+      - name: Setup NodeJs with artifact registry
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node_version }}
+          registry-url: ${{inputs.artifact_repository_url}}
+        if: ${{ inputs.artifact_repository_url }}
+        
+      - name: Setup NodeJs 
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ inputs.node_version }}
+      
+      - name: Npm Audit
+        run: npm audit --production --audit-level critical
+        if: ${{ contains( inputs.build_phases,'audit') }}
+        shell: bash
+      
+      - name: Npm install
+        run: npm install
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'install') }}
+        
+      - name: Npm ci
+        run: npm ci
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'ci')  }}
+        
+      - name: Lint
+        run: npm run lint
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'lint') }}
+        
+      - name: Formatting Check
+        run: npm run format:check
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'formatcheck') }}
+        
+      - name: Unit tests
+        run: npm run test:coverage
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'testcoverage') }}
+        
+      - name: Typescript Errors
+        run: npm run build:ts
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'typescript') }}
+        
+      - name: Build
+        run: npm run build
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'build') }}  
+        
+      - name: Npm Package
+        run: npm pack
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'pack') || contains( inputs.build_phases,'package')  }}  
+        
+      - name: Npm Publish
+        run: npm publish
+        shell: bash
+        if: ${{ contains( inputs.build_phases,'publish') }}
+        
+        

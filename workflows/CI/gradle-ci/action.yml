@@ -1,0 +1,89 @@
+# ci_build.yml
+name: 'Build and push Artifact'
+description: 'Building and Pushing Artifact to Azure Artifact Repository'
+inputs:
+  
+  build_file_path:
+    required: false
+   
+  build_file_name:
+    required: false
+  jdk_version:
+    required: false
+  settings_file_path:
+    required: false
+  settings_file_name:
+    required: false
+  build_arguments:
+    required: false
+  build_phases: 
+    required: false
+  build_and_push_container_image:
+    required: false
+    
+  artifact_repository_pat:
+    required: false
+    
+  run_code_quality_analysis:
+    required: true
+  cq_project_key:
+    required: false
+  cq_project_name:
+    required: false  
+  cq_host_url:
+    required: false
+  cq_token:
+    required: false
+  cq_scan_arguments:
+     required: false
+ 
+runs:
+  using: "composite"
+  steps:
+    - run: echo Hello, You are Executing Composite action to Execute Build
+      shell: bash
+    - name: prep - current repo path to build
+      run: |
+         pwd
+         ls -lart
+         if [[ -f ./gradlew ]]; then 
+           chmod +x ./gradlew
+         fi
+      shell: bash   
+      
+        
+    - name: install java version requested
+      uses: actions/setup-java@v2
+      with:
+        java-version: ${{inputs.jdk_version}}
+        distribution: 'adopt'
+      if: ${{inputs.jdk_version}}
+      
+    - name: Build with Gradle
+      run: |
+         cd ./${{ inputs.build_file_path }}
+         pwd
+         [ -f ${{ inputs.build_file_name }} ] && chmod +x gradlew
+         ./${{ inputs.build_file_name }} ${{ inputs.build_phases }} ${{inputs.build_arguments}}
+      shell: bash
+      
+    - name: Code Quality Analysis
+      if: ${{ inputs.run_code_quality_analysis == 'true' && inputs.cq_project_key }}  
+      run: |
+        cd ./${{ inputs.build_file_path }}
+        pwd
+        ./${{ inputs.build_file_name }} sonarqube -Dsonar.projectKey=${{inputs.cq_project_key}} -Dsonar.host.url=${{inputs.cq_host_url}} -Dsonar.login=${{inputs.cq_token}}  ${{inputs.build_arguments}} ${{ inputs.cq_scan_arguments }}
+      shell: bash
+      
+    - name: Code Quality Analysis
+      if: ${{ inputs.run_code_quality_analysis == 'true' && ( !inputs.cq_project_key || inputs.cq_project_key == '' )}}  
+      run: |
+        cd ./${{ inputs.build_file_path }}
+        pwd
+        ./${{ inputs.build_file_name }} sonarqube -Dsonar.host.url=${{inputs.cq_host_url}} -Dsonar.projectName=${{inputs.cq_project_name}} -Dsonar.login=${{ inputs.cq_token }} ${{ inputs.build_arguments }} ${{ inputs.cq_scan_arguments }}
+      shell: bash    
+      
+
+#     - name: Validate Gradle wrapper
+#       if: ${{ inputs.build_tool == 'gradle' }}
+#       uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b

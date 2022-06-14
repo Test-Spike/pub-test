@@ -1,0 +1,265 @@
+# Appsec Composite action
+name: 'DevSecOps Application Security Actions'
+description: 'Running Security Scans for project codes'
+inputs:
+  application_name:
+    required: true
+  build_tool:
+    required: true
+  run_dependency_scan:
+    required: true
+  dependency_scan_token:
+    required: false
+  dependency_scan_arguments:
+    required: false
+    
+      
+  run_sast_scan:
+    required: true
+  sast_release_id:
+    required: false
+  sast_api_key:
+    required: false
+  sast_api_secret:
+    required: false
+  sast_scan_notes:
+    required: false
+  sast_scan_options:
+    required: false
+  application_src_path:
+    required: false
+  application_artifact_zip_path:
+    required: false
+  download_sast_scan_result:
+    required: false
+    default: false
+    
+  run_dast_scan:   
+    required: false
+    
+  run_container_scan:
+    required: false
+  container_scan_user:
+    required: false
+  container_scan_password:
+    required: false
+  container_scan_url:
+    required: false
+  image_name:
+    required: false
+  image_tag:
+    required: false
+  registry_server:
+    required: false
+  registry_username:
+    required: false
+  registry_password:
+    required: false
+  
+  
+runs:
+  using: "composite"
+  steps:
+  - run : echo $RUNNER_NAME $RUNNER_OS $RUNNER_ARCH $RUNNER_TEMP
+    shell: bash
+    
+    
+  - run: echo  argument for run_dependency_scan = ${{inputs.run_dependency_scan}}
+    shell: bash
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash   
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  - name: Message
+    run: |
+       echo #                                      Running Dependency SCAN                                            #
+    shell: bash
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  
+  - name: Snyk SCA Scanning
+    uses: DigitalInnovation/cloud-devsecops-pipelineactions/workflows/appsec/snyk@latest
+    with:      
+      dependency_scan_token: ${{ inputs.dependency_scan_token }}
+      dependency_scan_arguments: ${{ inputs.dependency_scan_arguments }}
+      build_tool: ${{ inputs.build_tool }}
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  - name: Message
+    run: |
+       echo #                                      Finished Dependency SCAN                                            #
+    shell: bash
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_dependency_scan == 'true' &&  inputs.dependency_scan_token }}
+    
+         
+ 
+  - run: echo  argument for run_sast_scan = ${{inputs.run_sast_scan}}
+    shell: bash
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_sast_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #                                      Running SAST SCAN                                            #
+    shell: bash
+    if: ${{inputs.run_sast_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_sast_scan == 'true' }}
+    
+  - name: Fortify Scan Create source Zip upload to FOD for Scanning
+    uses: DigitalInnovation/cloud-devsecops-pipelineactions/workflows/appsec/fortify@latest
+    with:
+      sast_release_id: ${{inputs.sast_release_id }}
+      sast_api_key: ${{ inputs.sast_api_key}}
+      sast_api_secret: ${{ inputs.sast_api_secret}}
+      sast_scan_options: ${{ inputs.sast_scan_options }}
+      sast_scan_notes: ${{inputs.sast_scan_notes}}
+      application_name: ${{inputs.application_name}}
+      application_src_path: ${{inputs.application_src_path}}
+      application_artifact_zip_path: ${{inputs.application_artifact_zip_path}}
+      download_sast_scan_result: ${{ inputs.download_sast_scan_result }}
+    if: ${{inputs.run_sast_scan == 'true' }}
+    
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash   
+    if: ${{inputs.run_sast_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #                                      Finished SAST SCAN                                            #
+    shell: bash
+    if: ${{inputs.run_sast_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_sast_scan == 'true' }}
+
+
+
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #                                      Running Container SCAN                                       #
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+  - name: Run Container Scan for Repostiory
+    uses: DigitalInnovation/cloud-devsecops-pipelineactions/workflows/appsec/prisma@latest
+    with: 
+      container_scan_user: ${{ inputs.container_scan_user }}
+      container_scan_password: ${{ inputs.container_scan_password }}
+      container_scan_url: ${{ inputs.container_scan_url }}
+      image_name: ${{inputs.image_name}}
+      image_tag: ${{inputs.image_tag}}
+      registry_server: ${{inputs.registry_server}}
+      registry_username: ${{ inputs.registry_username }}
+      registry_password: ${{ inputs.registry_password }}
+    if: ${{ inputs.run_container_scan == 'true' }}  
+    
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #                                      Finished Container SCAN                                       #
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+  - name: Message
+    run: |
+       echo #===================================================================================================#
+    shell: bash
+    if: ${{inputs.run_container_scan == 'true' }}
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   ##### SNYK Code
+   # run: |
+    #   echo SNYK token is provided running SNYK scan for the project
+    #   echo "----------Download Latest Snyk CLI-----------"
+    #   curl -Lo ./snyk "https://github.com/snyk/snyk/releases/download/v1.683.0/snyk-linux"
+    #   chmod +x snyk
+    #   ls -lrt
+    #   echo ./snyk auth ${{inputs.dependency_scan_token}}
+    #   ./snyk auth ${{inputs.dependency_scan_token}}
+    #   ./snyk test --all-projects -- ${{inputs.dependency_scan_arguments}}  || true
+    #   ./snyk monitor --all-projects -- ${{inputs.dependency_scan_arguments}} || true
+    # shell: bash 
+    
+    ###### FOD Code
+    
+   #   uses: actions/setup-java@v1
+  #   with:
+  #     java-version: 1.8
+  # - name: Download fortify executable and run scan 
+  #   if: ${{inputs.run_sast_scan == 'true' }}
+  #   run: |
+  #      sudo wget -c https://github.com/fod-dev/fod-uploader-java/releases/download/v5.2.1/FodUpload.jar  
+  #      sudo apt install zip
+  #      zip -r ${{inputs.project_name}}_fortify.zip .
+  #      java -jar FodUpload.jar -ac ${{ inputs.sast_api_key }} ${{ inputs.sast_api_secret }} -rid ${{ inputs.sast_release_id }} -purl ${{ env.SAST_PORTAL_URL }} -apiurl ${{ env.SAST_API_URL }} -z ${{inputs.project_name}}_fortify.zip ${{ env.SAST_OPTIONS }}    
+  #   shell: bash
+  #   env:
+  #     SAST_PORTAL_URL: https://emea.fortify.com/
+  #     SAST_API_URL: https://api.emea.fortify.com/
+  #     SAST_OPTIONS: '-ep 2 -a 2 -rp 0 -pp 1 -apf -I 1'
+
+   
+   
+    
+#   - name: Run Prisma Scan for Repository
+#     if: ${{ inputs.run_container_scan == 'true' }}
+#     run: |
+#       curl --user ${{ inputs.container_scan_user }}:${{ inputs.container_scan_password }} --output ./twistcli ${{ inputs.container_scan_url }}/api/v1/util/twistcli
+#       chmod a+x ./twistcli     
+#     shell: bash
+#   - name: Scan the image using Prisma Cloud
+#     if: ${{ inputs.run_container_scan == 'true' }}
+#     run: |
+#       #./twistcli images scan --address ${{ inputs.container_scan_url }} --user ${{ inputs.container_scan_user }} --password ${{ inputs.container_scan_password }} --details ${{inputs.docker_image_name}}:${{inputs.docker_image_tag}}
+#       ./twistcli images scan --address ${{ inputs.container_scan_url }} --user ${{ inputs.container_scan_user }} --password ${{ inputs.container_scan_password }} --containerized --details ${{inputs.docker_image_name}}:${{inputs.docker_image_tag}}
+#     shell: bash
+    
+    

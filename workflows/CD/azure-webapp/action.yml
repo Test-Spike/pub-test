@@ -1,0 +1,105 @@
+name: 'DevSecOps Application Security Actions'
+description: 'Running Fority Security Scans for project codes'
+
+inputs:
+  
+  environment:
+    required: false
+    default: dev    
+  application_release_name:
+    required: false
+  release_version:
+    required: false  
+  webapp_name:
+    required: false
+  resource_group:
+    required: false
+  source_path:
+    required: false
+  image_name:
+    required: false
+  image_tag:
+    required: false
+  azure_profile:
+    required: false
+  azure_sp: 
+    required: false
+  azure_client_id: 
+    required: false
+  azure_client_secret: 
+    required: false
+  azure_tenant_id:
+    required: false
+  subscription:
+    required: false    
+  
+runs:
+  using: "composite"
+  steps:
+    - run: echo 'Deploy to Azure WebApp using Profile and Source path / Image'
+      if: ${{ inputs.azure_profile != ''  }}
+      shell: bash
+      
+    - name: 'Deploy to Azure WebApp using Profile and Source'
+      if: ${{ inputs.azure_profile != '' }}
+      uses: azure/webapps-deploy@v2
+      with: 
+        app-name: ${{inputs.webapp_name}}
+        publish-profile: ${{ inputs.azure_profile }}
+        source-path: ${{inputs.source_path}}
+        image: ${{inputs.image_name}}:${{inputs.image_tag}}
+        
+    
+#     - run: echo 'Deploy to Azure WebApp using Profile and Container Image'
+#       if: ${{ inputs.azure_profile != '' && ( inputs.image_name != '' && inputs.source_path == '') }}
+#       shell: bash
+#     - name: 'Deploy to Azure WebApp using Profile and Container'
+#       if: ${{ inputs.azure_profile != '' && ( inputs.image_name != '' && inputs.source_path == '') }}
+#       uses: azure/webapps-deploy@v2
+#       with: 
+#         app-name: ${{inputs.webapp_name}}
+#         publish-profile: ${{ inputs.azure_profile }}
+#         image: ${{inputs.image_name}}:${{inputs.image_tag}}
+
+
+    - run: echo 'Deploy to Azure Webapp using Service Principal and Credential '
+      if:  ${{ inputs.azure_profile == '' }}
+      shell: bash
+      
+    - name: 'Deploy to Azure Webapp using Service Principal - by login to Azure'
+      uses: azure/login@v1
+      with:
+        creds: '{"clientId": "${{ inputs.azure_client_id }}", "clientSecret": "${{ inputs.azure_client_secret }}", "subscriptionId": "${{ inputs.subscription }}", "tenantId": "${{ inputs.azure_tenant_id }}"}'
+      if:  ${{ inputs.azure_profile == '' }}
+      
+    - uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{inputs.webapp_name}}
+        image: ${{inputs.image_name}}:${{inputs.image_tag}}
+        source_path: ${{inputs.source_path}}
+      if:  ${{ inputs.azure_profile == '' }}
+
+
+#   - name: Deploy to Azure Web Apps
+#     uses: azure/CLI@v1
+#     id: webapp
+#     with:
+#         inlineScript: |
+#           RETRY=5;
+#           SLEEP=5;
+#           COUNT=0;
+#           CMD="az webapp deployment source config-zip \
+#             --resource-group ${{ inputs.resource_group }} \
+#             --name ${{ inputs.application_release_name }} \
+#             --src ${{ inputs.source_path }} --timeout 360";
+#           until [ "$COUNT" -ge $RETRY ]
+#           do
+#             $CMD && break;
+#             COUNT=$((COUNT+1));
+#             sleep $SLEEP;
+#           done
+#           if test $COUNT -eq $RETRY
+#           then
+#             echo "Deployment was unsuccesful :(";
+#             exit 127;
+#           fi

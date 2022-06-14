@@ -1,0 +1,74 @@
+# Appsec Composite action
+name: 'DevSecOps Application Security Actions'
+description: 'Running Security Scans for project codes'
+inputs:
+  container_scan_user:
+    required: false
+  container_scan_password:
+    required: false
+  container_scan_url:
+    required: false
+  image_name:
+    required: false
+  image_tag:
+    required: false
+  registry_server:
+    required: false
+  registry_username:
+    required: false
+  registry_password:
+    required: false
+    
+    
+  
+  
+runs:
+  using: "composite"
+  steps:
+    - name: Run Prisma Scan for Repository
+      run: |
+        curl --user ${{ inputs.container_scan_user }}:${{ inputs.container_scan_password }} --output ./twistcli ${{ inputs.container_scan_url }}/api/v1/util/twistcli
+        chmod a+x ./twistcli     
+      shell: bash
+      
+    ########## Login to Registry server if Registru server info is provided ########  
+    - name: Login to Registry Server
+      if: ${{ inputs.registry_server && ( !contains(inputs.registry_server, 'local') && !contains(inputs.registry_server,'docker.io') ) && !contains(runner.name,'selfhosted') }}
+      uses: Azure/docker-login@v1
+      with:
+        username: ${{inputs.registry_username}}
+        password: ${{inputs.registry_password}}
+        login-server: ${{inputs.registry_server}}  
+        
+    - name: pull image from registry server
+      if: ${{ inputs.registry_server && ( !contains(inputs.registry_server, 'local') && !contains(inputs.registry_server,'docker.io') ) && !contains(runner.name,'selfhosted')  }}
+      run: |
+         echo docker pull ${{ inputs.registry_server }}/${{inputs.image_name}}:${{ inputs.image_tag }}
+         docker pull ${{ inputs.registry_server }}/${{inputs.image_name}}:${{ inputs.image_tag }}
+         #./twistcli images scan --address ${{ inputs.container_scan_url }} --user ${{ inputs.container_scan_user }} --password ${{ inputs.container_scan_password }} --details ${{ inputs.registry_server }}/${{inputs.image_name}}:${{inputs.image_tag}}
+      shell: bash
+      
+    - name: pull image from registry server
+      if: ${{ inputs.registry_server && ( !contains(inputs.registry_server, 'local') && !contains(inputs.registry_server,'docker.io') ) && contains(runner.name,'selfhosted')  }}
+      run: |
+         echo ctr -u user:passwrd pull ${{ inputs.registry_server }}/${{inputs.image_name}}:${{ inputs.image_tag }}
+         ctr pull -u "${{inputs.registry_username}}:${{inputs.registry_password}}" ${{ inputs.registry_server }}/${{inputs.image_name}}:${{ inputs.image_tag }}
+         #./twistcli images scan --address ${{ inputs.container_scan_url }} --user ${{ inputs.container_scan_user }} --password ${{ inputs.container_scan_password }} --details ${{ inputs.registry_server }}/${{inputs.image_name}}:${{inputs.image_tag}}
+      shell: bash  
+      
+      
+    - name: pull image from docker hub
+      if: ${{ !inputs.registry_server || contains(inputs.registry_server,'docker.io') && !contains(runner.name,'selfhosted') }}
+      run: |
+         echo docker pull ${{inputs.image_name}}:${{ inputs.image_tag }}
+         docker pull ${{inputs.image_name}}:${{ inputs.image_tag }}
+      shell: bash  
+      
+      
+      
+      
+    - name: Scan the image using Prisma Cloud
+      run: |
+        ./twistcli images scan --address ${{ inputs.container_scan_url }} --user ${{ inputs.container_scan_user }} --password ${{ inputs.container_scan_password }} --details ${{ inputs.registry_server }}/${{inputs.image_name}}:${{inputs.image_tag}}
+      shell: bash
+      #if: ${{ !inputs.registry_server || contains(inputs.registry_server,'docker.io')  }} 

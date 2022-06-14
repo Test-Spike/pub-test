@@ -1,0 +1,199 @@
+name: 'Insight actions - Pipeline Metrics'
+description: 'Pipeline Metrics of Builds'
+
+inputs:
+  set_newRelic_Deployment_marker:
+    required: false
+  newRelic_key: 
+    required: false
+  newRelic_accountId:
+    required: false
+  newRelic_applicationId:
+    required: false
+  newRelic_user:
+    required: false
+  git_commit_id:
+    required: false
+  comment:
+    required: false
+    
+  
+  
+runs:
+  using: "composite"
+  steps:
+  #Displaying the Job & Steps details
+  - name: Job Details
+    env:
+      REPOSITORY_NAME : ${{github.event.repository.name}}
+      REPOSITORY_ID : ${{github.event.repository.id}}
+      BRANCH_NAME: ${{ github.event.workflow_run.head_branch}}
+      WORKFLOW_ID : ${{ github.event.workflow.id }}
+      WORKFLOW_NAME : ${{ github.event.workflow.name }}
+      WORKFLOW_RUN_ID : ${{ github.event.workflow_run.id }}
+      WORKFLOW_RUN_NUMBER: ${{ github.event.workflow_run.run_number}}
+      WORKFLOW_START_TIME: ${{ github.event.workflow_run.run_started_at}}
+      WORKFLOW_END_TIME: ${{ github.event.workflow_run.updated_at}}
+      WORKFLOW_STATUS: ${{github.event.workflow_run.conclusion}}
+      COMMIT_BY: ${{github.event.sender.login}}
+    run: |
+      mkdir -p $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"
+      cd $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"
+
+      curl -s -H "Authorization: token ${{github.token}}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{github.event.repository.owner.login}}/${{github.event.repository.name}}/actions/runs/${{github.event.workflow_run.id}}/jobs -o jobs_details.json
+
+      num=$(jq -r '.total_count' jobs_details.json)
+      echo "====================================Details on the Jobs & Steps===================================="
+      echo "Total Number of Jobs :"$num
+      echo "WORKFLOW_JOBS_COUNT="$num >> $GITHUB_ENV
+      declare -i ACTUAL_RUNTIME=0
+      declare -i TOTAL_STEPS=0
+      echo "========================================================================"
+      for ((n=0;n<$num;n++));
+      do
+       echo "Job ID: " $(jq -r '.jobs['$n'].id' jobs_details.json)
+       echo "Job Name: " $(jq -r '.jobs['$n'].name' jobs_details.json)
+       echo "Job Status : " $(jq -r '.jobs['$n'].conclusion' jobs_details.json)
+       echo "Started at: " $(jq -r '.jobs['$n'].started_at' jobs_details.json)
+       echo "Ended at :" $(jq -r '.jobs['$n'].completed_at' jobs_details.json)
+       START_TIME=$(date -d "$(jq -r '.jobs['$n'].started_at' jobs_details.json)" +%s)
+       END_TIME=$(date -d "$(jq -r '.jobs['$n'].completed_at' jobs_details.json)" +%s)
+       ELAPSE=$(( $END_TIME - $START_TIME ))
+
+       #Sending Job details to new Relic
+
+       jq -n \
+       --arg eventType DSOGitJobsInsightsPOV \
+       --arg Repository_Name "${{env.REPOSITORY_NAME}}" \
+       --arg Repo_ID "${{env.REPOSITORY_ID}}" \
+       --arg Workflow_ID "${{env.WORKFLOW_ID}}" \
+       --arg Run_Id "${{env.WORKFLOW_RUN_ID}}" \
+       --arg Run_Number "${{env.WORKFLOW_RUN_NUMBER}}" \
+       --arg Job_Id "$(jq -r '.jobs['$n'].id' jobs_details.json)" \
+       --arg Job_Name "$(jq -r '.jobs['$n'].name' jobs_details.json)" \
+       --arg Job_Duration $ELAPSE \
+       --arg Job_Status $(jq -r '.jobs['$n'].conclusion' jobs_details.json) \
+       '[{"eventType": $eventType,"Repository_Name": $Repository_Name,"Repo_ID": $Repo_ID,"Workflow_ID": $Workflow_ID,"Run_Id": $Run_Id,"Run_Number": $Run_Number,"Job_Id": $Job_Id,"Job_Name": $Job_Name,"Job_Duration": ($Job_Duration | tonumber),"Job_Status":$Job_Status}]' > $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"/git_jobs_insights.json
+       #cat $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"/git_jobs_insights.json
+       CURL_STATUS=$(gzip -c $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"/git_jobs_insights.json | curl -sS -X POST -H "Content-Type: application/json" -H "Api-Key: ${{inputs.newRelic_key}}" -H "Content-Encoding: gzip" https://insights-collector.newrelic.com/v1/accounts/${{inputs.newRelic_accountId}}/events --data-binary @-)
+       
+       # Checking the status of New relic Metrics ingestion
+       #echo "========================================================================"
+       echo "Metrics Ingestion Status: " $CURL_STATUS
+         if [[ $CURL_STATUS == *"\"success\":true"* ]];
+         then
+           echo -e "\e[1;32mMetrics Succesfully sent to NewRelic"
+         else
+           echo -e "\e[1;31mError in sending metrics to New Relic. Please check the API Key and account ID"
+           exit -1
+         fi
+       echo "========================================================================"
+       #echo "Job Runtime: " $ELAPSE "s"
+       ACTUAL_RUNTIME=$ACTUAL_RUNTIME+$ELAPSE
+       #echo "$(($ELAPSE/60))m $(($ELAPSE%60))s"
+       steps_count=$(jq -r '.jobs['$n'].steps|length' jobs_details.json)
+       #echo "Number of Steps: "$steps_count
+       TOTAL_STEPS=$TOTAL_STEPS+$steps_count
+       
+       #Parsing through each steps.
+       
+       #echo "__Details on each Steps__"
+       #for ((i=0;i<$steps_count;i++))
+       #do
+         #echo "     Step Name: " $(jq -r '.jobs['$n'].steps['$i'].name' jobs_details.json)
+         #echo "     Status: " $(jq -r '.jobs['$n'].steps['$i'].conclusion' jobs_details.json)
+         #echo "     Start time: " $(jq -r '.jobs['$n'].steps['$i'].started_at' jobs_details.json)
+         #echo "     End time: " $(jq -r '.jobs['$n'].steps['$i'].completed_at' jobs_details.json)
+         #echo "."
+       #done  
+       #echo "========================================================================"
+      done
+      echo "ACTUAL_RUNTIME="$ACTUAL_RUNTIME >> $GITHUB_ENV
+      echo "TOTAL_STEPS="$TOTAL_STEPS >> $GITHUB_ENV
+    shell: bash
+    
+  #saving the job runtime details in a csv file
+  - name: Update the file
+    env:
+      REPOSITORY_NAME : ${{github.event.repository.name}}
+      REPOSITORY_ID : ${{github.event.repository.id}}
+      BRANCH_NAME: ${{ github.event.workflow_run.head_branch}}
+      WORKFLOW_ID : ${{ github.event.workflow.id }}
+      WORKFLOW_NAME : ${{ github.event.workflow.name }}
+      WORKFLOW_RUN_ID : ${{ github.event.workflow_run.id }}
+      WORKFLOW_RUN_NUMBER: ${{ github.event.workflow_run.run_number}}
+      WORKFLOW_START_TIME: ${{ github.event.workflow_run.run_started_at}}
+      WORKFLOW_END_TIME: ${{ github.event.workflow_run.updated_at}}
+      WORKFLOW_STATUS: ${{github.event.workflow_run.conclusion}}
+      COMMIT_BY: ${{github.event.sender.login}}
+    run: |
+      TOTAL_RUN_TIME=$(($(date -d "${{env.WORKFLOW_END_TIME}}" +%s)-$(date -d "${{env.WORKFLOW_START_TIME}}" +%s)))
+      cd /
+      mkdir -p $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"
+      cd $GITHUB_WORKSPACE/GitMetrics/"${{env.REPOSITORY_NAME}}"
+      if [ -e runtime_details.csv ]
+      then
+        #echo "File exists"
+        #echo ""
+        #cat runtime_details.csv
+        echo "${{env.REPOSITORY_NAME}},${{env.REPOSITORY_ID}},${{env.BRANCH_NAME}},${{ env.WORKFLOW_NAME }},${{ env.WORKFLOW_ID }},${{ env.WORKFLOW_RUN_ID }},${{env.WORKFLOW_RUN_NUMBER}},$WORKFLOW_JOBS_COUNT,$TOTAL_STEPS,${{ env.WORKFLOW_START_TIME}},${{ env.WORKFLOW_END_TIME}},$TOTAL_RUN_TIME,$ACTUAL_RUNTIME,${{env.WORKFLOW_STATUS}}">> runtime_details.csv
+      else
+        #echo "File does not exist"
+        #echo ""
+        echo "Repository_Name,Repo_ID,Branch,Workflow_Name,Workflow_ID,Run_Id,Run_Number,Jobs_Count,Steps_Count,Run_Started,Run_Ended,Total_Duration,Jobs_Duration,status" >> runtime_details.csv
+        echo "${{env.REPOSITORY_NAME}},${{env.REPOSITORY_ID}},${{env.BRANCH_NAME}},${{ env.WORKFLOW_NAME }},${{ env.WORKFLOW_ID }},${{ env.WORKFLOW_RUN_ID }},${{env.WORKFLOW_RUN_NUMBER}},$WORKFLOW_JOBS_COUNT,$TOTAL_STEPS,${{ env.WORKFLOW_START_TIME}},${{ env.WORKFLOW_END_TIME}},$TOTAL_RUN_TIME,$ACTUAL_RUNTIME,${{env.WORKFLOW_STATUS}}">> runtime_details.csv
+      fi  
+      #echo "===================================Updated file is==================================="
+      #cat runtime_details.csv
+      echo "TOTAL_RUN_TIME="$TOTAL_RUN_TIME >> $GITHUB_ENV
+    shell: bash
+    
+  #sending data to New relic. 
+  - name: Send_data_to_newRelic
+    env:
+      REPOSITORY_NAME : ${{github.event.repository.name}}
+      REPOSITORY_ID : ${{github.event.repository.id}}
+      BRANCH_NAME: ${{ github.event.workflow_run.head_branch}}
+      WORKFLOW_ID : ${{ github.event.workflow.id }}
+      WORKFLOW_NAME : ${{ github.event.workflow.name }}
+      WORKFLOW_RUN_ID : ${{ github.event.workflow_run.id }}
+      WORKFLOW_RUN_NUMBER: ${{ github.event.workflow_run.run_number}}
+      WORKFLOW_START_TIME: ${{ github.event.workflow_run.run_started_at}}
+      WORKFLOW_END_TIME: ${{ github.event.workflow_run.updated_at}}
+      WORKFLOW_STATUS: ${{github.event.workflow_run.conclusion}}
+      COMMIT_BY: ${{github.event.sender.login}}
+    run: |
+      echo "Sending Data to New Relic"
+      jq -n \
+      --arg eventType DSOGitInsightsPOV \
+      --arg Repository_Name "${{env.REPOSITORY_NAME}}" \
+      --arg Repo_ID "${{env.REPOSITORY_ID}}" \
+      --arg Branch "${{env.BRANCH_NAME}}" \
+      --arg Workflow_Name "${{ env.WORKFLOW_NAME}}" \
+      --arg Workflow_ID "${{env.WORKFLOW_ID}}" \
+      --arg Run_Id "${{env.WORKFLOW_RUN_ID}}" \
+      --arg Run_Number ${{env.WORKFLOW_RUN_NUMBER}} \
+      --arg Workflow_Actor "${{env.COMMIT_BY}}" \
+      --arg Jobs_Count $WORKFLOW_JOBS_COUNT \
+      --arg Steps_Count $TOTAL_STEPS \
+      --arg Run_Started "${{env.WORKFLOW_START_TIME}}" \
+      --arg Run_Ended ${{ env.WORKFLOW_END_TIME}} \
+      --arg Total_Duration $TOTAL_RUN_TIME \
+      --arg Jobs_Duration $ACTUAL_RUNTIME \
+      --arg Workflow_Status "${{env.WORKFLOW_STATUS}}" \
+      '[{"eventType": $eventType,"Repository_Name": $Repository_Name,"Repo_ID": $Repo_ID,"Branch": $Branch,"Workflow_Name": $Workflow_Name,"Workflow_ID": $Workflow_ID,"Run_Id": $Run_Id,"Run_Number": ($Run_Number | tonumber),"Actor": $Workflow_Actor,"Jobs_Count": ($Jobs_Count | tonumber),"Steps_Count": ($Steps_Count | tonumber),"Run_Started": $Run_Started,"Run_Ended": $Run_Ended,"Total_Duration": ($Total_Duration | tonumber),"Jobs_Duration":($Jobs_Duration | tonumber),"Workflow_Status":$Workflow_Status}]' > $GITHUB_WORKSPACE/GitMetrics/git_insights.json
+      cat $GITHUB_WORKSPACE/GitMetrics/git_insights.json
+      CURL_STATUS=$(gzip -c $GITHUB_WORKSPACE/GitMetrics/git_insights.json | curl -sS -X POST -H "Content-Type: application/json" -H "Api-Key: ${{inputs.newRelic_key}}" -H "Content-Encoding: gzip" https://insights-collector.newrelic.com/v1/accounts/${{inputs.newRelic_accountId}}/events --data-binary @-)
+      
+      # Checking the status of New relic Metrics ingestion
+       echo "========================================================================"
+       echo "Metrics Ingestion Status of the Pipeline: " $CURL_STATUS
+         if [[ $CURL_STATUS == *"\"success\":true"* ]];
+         then
+           echo -e "\e[1;32mMetrics Succesfully sent to NewRelic"
+         else
+           echo -e "\e[1;31mError in sending metrics to New Relic. Please check the API Key and account ID"
+           exit -1
+         fi
+       #echo "========================================================================"
+    shell: bash
