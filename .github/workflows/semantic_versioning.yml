@@ -99,7 +99,8 @@ jobs:
         repo=$(basename $remote .git)
         new_tag=${{needs.Defining_Semantic_Version.outputs.new_version}}
         #"****************GETTING LATEST COMMIT SHA***********************"
-        commit=$(git rev-parse HEAD)        
+        commit=$(git rev-parse HEAD)     
+        echo $commit
         echo "*****************DELETING LATEST TAG FROM THE PREVIOUS RELEASE*****************"
         curl \
         -X DELETE \
